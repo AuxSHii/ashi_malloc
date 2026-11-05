@@ -38,6 +38,23 @@ step we are gonna use:
 [read more](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc)
 
 
+### for unix:
+### Understanding the Unix Heap: The sbrk System Call
+#### The Minimum Theory
+in Unix-like operating systems, your program's memory has a boundary called the **program break**. This break marks the exact end of your heap. Everything below the program break is memory that your OS has officially mapped and given your program permission to use. everything above it is unallocated; if your program tries to touch it, the OS will trigger a crash (a segmentation fault).
+[read more](https://pubs.opengroup.org/onlinepubs/7908799/xsh/brk.html)
+
+the sbrk() (set break) system call is the mechanism we use to ask the OS to move this boundary line upwards, which effectively creates more flexible heap space for us to divide up and hand to the user.
+[here](https://docs.oracle.com/cd/E36784_01/html/E36872/sbrk-2.html)
+
+#### How to Use It Here
+to use sbrk in our malloc implementation, we must include the <unistd.h> header. The function takes a single argument: an integer representing the number of bytes by which you want to increase the heap.
+ * **Allocating Memory:** calling sbrk(1024) tells the OS to move the program break up by 1,024 bytes. If it succeeds, it returns a void pointer to the *start* of the newly created space.
+ * **Checking Current Position:** calling sbrk(0) is a standard trick. It adds zero bytes, meaning it doesn't allocate any new memory. Instead, it simply returns the current memory address of the program break, letting you know exactly where your heap currently ends.
+ * **Handling Errors:** if the system is entirely out of RAM or hits a memory limit, sbrk will fail. Instead of returning NULL, it returns (void*) -1. your code must explicitly check for (void*) -1 to safely reject a malloc request rather than trying to write data to an invalid -1 memory address.
+
+
+
 
 
 ### High-Level Steps
