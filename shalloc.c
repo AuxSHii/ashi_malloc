@@ -3,6 +3,23 @@
 #include <stddef.h>
 #include <stdio.h>
 
+typedef struct block_meta 
+{
+    size_t size; 
+    int free; //1=free , 0=use
+    struct block_meta *next; //next block in list
+
+} block_meta;
+
+//global header ptr
+void *global_base = NULL;
+
+//macro for the size of struct - for totl mem needed
+#define META_SIZE sizeof(block_meta);
+
+
+
+
 #ifdef _WIN32
 #include <windows.h>
 
