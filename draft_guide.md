@@ -115,7 +115,9 @@ return request;
 }
 ```
 ---
+
 ## Section 2: Structuring Memory (Headers and Metadata)
+
 ### The Minimum Theory
 When you call `malloc(32)`, how does `free()` later know you allocated exactly 32 bytes?
 The secret is **Metadata** (data about data). Before the actual memory we give to the user, we
