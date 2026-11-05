@@ -25,9 +25,9 @@ Before you can allocate memory from a heap, you need a handle (HANDLE) to that h
 
 
 When calling HeapAlloc, you can fine-tune its behavior with the following dwFlags:
-• HEAP_ZERO_MEMORY (0x8): Automatically clears the memory block, setting all bytes to zero.
-• HEAP_GENERATE_EXCEPTIONS (0x4): Tells the OS to raise a structured exception (STATUS_NO_MEMORY) upon failure instead of returning NULL.
-• HEAP_NO_SERIALIZE (0x1): Disables mutual exclusion (thread safety) for this call. Use this only if you are managing thread safety manually, as it offers a small performance boost but can lead to heap corruption if multiple threads access the heap simultaneously.
+1. HEAP_ZERO_MEMORY (0x8): Automatically clears the memory block, setting all bytes to zero.
+2. HEAP_GENERATE_EXCEPTIONS (0x4): Tells the OS to raise a structured exception (STATUS_NO_MEMORY) upon failure instead of returning NULL.
+3. HEAP_NO_SERIALIZE (0x1): Disables mutual exclusion (thread safety) for this call. Use this only if you are managing thread safety manually, as it offers a small performance boost but can lead to heap corruption if multiple threads access the heap simultaneously.
 
 step we are gonna use: 
 1. Get a Heap Handle: Retrieve the default heap handle for the calling process.
