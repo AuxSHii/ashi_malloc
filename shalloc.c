@@ -21,5 +21,11 @@ void *request_os_mem(size_t size){
     return HeapAlloc(heapH , 0 , size);
     
     #else //for unix
+    void *request = sbrk(size); //returna ptr to mem addrss
+    if(request == (void*)-1 ) //failed 
+    	return NULL;
     
+    return request;
+    #endif
+
 }

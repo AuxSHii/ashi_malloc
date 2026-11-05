@@ -43,6 +43,7 @@ step we are gonna use:
 #### The Minimum Theory
 in Unix-like operating systems, your program's memory has a boundary called the **program break**. This break marks the exact end of your heap. Everything below the program break is memory that your OS has officially mapped and given your program permission to use. everything above it is unallocated; if your program tries to touch it, the OS will trigger a crash (a segmentation fault).
 [read more](https://pubs.opengroup.org/onlinepubs/7908799/xsh/brk.html)
+[mem management](https://blog.pr4tt.com/2016/02/01/posix-memory-management/)
 
 the sbrk() (set break) system call is the mechanism we use to ask the OS to move this boundary line upwards, which effectively creates more flexible heap space for us to divide up and hand to the user.
 [here](https://docs.oracle.com/cd/E36784_01/html/E36872/sbrk-2.html)
