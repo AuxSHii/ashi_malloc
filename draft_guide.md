@@ -17,6 +17,29 @@ finds an empty spot in the heap, reserves it, and gives you a safe pointer to us
 To do this, we first need to ask the OS to give us raw heap space.
 - On **Unix/Linux**, we use the `sbrk()` system call to move the end of the heap.
 - On **Windows**, we use `HeapAlloc()` and `GetProcessHeap()` from the native Windows API.
+
+#### for windows:
+windows: To request memory from the heap using the native Windows API, the standard and most efficient function to use is HeapAlloc().
+
+Before you can allocate memory from a heap, you need a handle (HANDLE) to that heap. You can either use the default heap provided to your process by calling GetProcessHeap, or create a private heap using HeapCreate.
+
+
+When calling HeapAlloc, you can fine-tune its behavior with the following dwFlags:
+• HEAP_ZERO_MEMORY (0x8): Automatically clears the memory block, setting all bytes to zero.
+• HEAP_GENERATE_EXCEPTIONS (0x4): Tells the OS to raise a structured exception (STATUS_NO_MEMORY) upon failure instead of returning NULL.
+• HEAP_NO_SERIALIZE (0x1): Disables mutual exclusion (thread safety) for this call. Use this only if you are managing thread safety manually, as it offers a small performance boost but can lead to heap corruption if multiple threads access the heap simultaneously.
+
+step we are gonna use: 
+1. Get a Heap Handle: Retrieve the default heap handle for the calling process.
+[read](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-getprocessheap)
+2. Allocate Memory: Call HeapAlloc passing the handle, formatting flags, and the desired size in bytes.[read more](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc)
+
+3. Free Memory: When finished, release the allocated block back to the heap using HeapFree
+[read more](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc)
+
+
+
+
 ### High-Level Steps
 1. Determine which Operating System the code is running on.
 2. If Unix, use `sbrk()` to request a block of memory.
