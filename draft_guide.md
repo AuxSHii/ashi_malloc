@@ -124,6 +124,22 @@ free or in use, and links to the next block.
 By chaining these blocks together, we create a **[Linked
 List](https://en.wikipedia.org/wiki/Linked_list)**. When `malloc` is called, we can traverse this list
 to find a block that is marked "free" and is large enough to hold the requested data.
+
+### ok! read this to get more comfortable with the concept
+
+### Understanding the Linked List in Memory Allocation
+
+a **Linked List** is a foundational data structure made up of individual elements called **nodes**. Instead of being packed tightly next to each other like items in an array, nodes can exist anywhere in memory. They stay connected because each node contains a **pointer**—a variable that stores the exact memory address of the next node in the sequence.
+
+this creates a chain of data. To read the list, you must start at the very first node (called the **head**) and follow the pointers one by one until you reach the end, which is typically marked by a NULL pointer.
+
+#### How We Use It Here
+the OS gives us a massive, completely empty expanse of heap memory. It has no built-in organization. By placing our struct block_meta header just before every chunk of memory we hand out, we artificially lay a linked list over this raw memory. In our implementation, the block_meta headers act as the nodes.
+ * **The Head:** we define a global pointer (void *global_base = NULL;) to act as the head of our list. It remembers exactly where our very first memory block begins.
+ * **Traversal:** when a user asks for memory via malloc(size), we start at global_base and "walk" down the chain by following the next pointers. This action is called **traversing** the list.
+ * **Searching:** as we traverse, we inspect each node's metadata. We check if the block is currently empty (free == 1) and if its capacity (size) is greater than or equal to what the user requested. If we hit NULL before finding a suitable block, we know we have to ask the OS to expand the heap.
+
+
 ### High-Level Steps
 1. Define a C `struct` to act as our block header.
 2. Include variables for block size, a flag to check if it's free, and a pointer to the next block.
