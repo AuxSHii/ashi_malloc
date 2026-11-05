@@ -179,3 +179,138 @@ struct block_meta *next; // Pointer to the next block in the list
 void *global_base = NULL;
 ```
 ---
+
+
+
+## Section 3: Implementing `malloc` (Finding and Allocating Blocks)
+
+### The Minimum Theory
+When a user asks for memory, we don't just blindly ask the OS for more. We first check if we
+already have a free block of memory that is large enough (maybe from a previous `free()` call).
+We will use a strategy called **First Fit**: we traverse our linked list from the beginning and stop
+at the *first* block that is free and large enough. If we reach the end of the list and find no
+suitable block, *then* we ask the OS for more memory and attach it to the end of our list.
+
+### read about allocation flow: How malloc Works actually:
+
+when a user program needs memory, it simply asks for a number of bytes, for example by calling malloc(50). from the user's perspective, memory magically appears. But under the hood, our custom malloc acts as a middleman between the user and the Operating system.
+
+because asking the OS for memory (via sbrk or HeapAlloc) requires a **Context Switch**—a relatively slow and expensive process where the CPU pauses the user program to let the operating system kernel take over—we want to bother the OS as little as possible.
+
+therefore, our primary goal is to **recycle** memory that has been previously used and freed, only asking the OS for more heap space as an absolute last resort...
+
+to find this recyclable memory efficiently, we use a search strategy called the **First Fit Algorithm**.
+
+#### the Bird's-Eye View (The Flow)
+
+ step by step negotiation that happens every time the user calls our malloc:
+
+ 1. **the initial check:** is this the very first time malloc is being called in the entire program? If our global_base pointer is NULL, we currently manage zero memory. We must immediately ask the OS for the requested size (plus our header size), set this new chunk as our global_base, and hand it to the user.
+
+ 2. **the search (first fit):** if global_base is not NULL, we already hav a linked list of memory blocks. We start at global_base and walk through the chain. We look at every block's header and ask two questions: *Is this block marked as free?* and *Is its size greater than or equal to what the user requested?*
+
+ 3. **the match:** The moment we find a block that answers "yes" to both questions, we stop searching. we flip its status from free = 1 to free = 0 (in use). We do not care if there is a "better fitting" block further down the list; we take the very *first fit* we find to keep the function running fast.
+ 4. **the fallback:** If we check every single block in our linked list and none of them are both free and large enough, we have exhausted our recycled memory. We calculate the size we need, ask the OS to expand the heap to accommodate a new block, attach this newly minted block to the very end of our linked list, and mark it as in use.
+
+#### using here: + returning address
+
+when we finally find or create the right memory block, a crucial detail is what we hand back to the user. We **cannot** just return the pointer to the block itself. If we did, the user would immediately write their data over our hidden metadata (corrupting our size and next pointer variables).
+
+instead, we use C pointer arithmetic and return block + 1. bcuz block is a pointer of type struct block_meta*, adding 1 tells the C compiler to step forward in memory by exactly the size of one block_meta struct. This perfectly skips over our hidden header and points the user to the exact byte where their safe, empty memory begins.
+
+
+### High-Level Steps
+1. If this is the very first time `malloc` is called, ask the OS for memory directly.
+2. If not, traverse the linked list to find a free block large enough for the request.
+3. If a block is found, mark it as in use and return it.
+4. If no block is found, ask the OS for more memory, create a new header, and link it.
+### Detailed Low-Level Steps
+1. Create a helper function `find_free_block(last_block, size)` that loops through the linked list.
+2. Create `request_space(last_block, size)` which uses our `request_os_memory` function. It
+creates a new `block_meta`, sets its size, sets `free = 0`, and links it to `last_block`.
+3. In the main `my_malloc(size)` function:
+- Check if size <= 0. If so, return NULL.
+- If `global_base` is NULL, call `request_space`.
+- If not NULL, call `find_free_block`.
+- If found, set `free = 0`.
+- If not found, call `request_space`.
+- Finally, return the pointer *after* the metadata block (i.e., `header + 1`).
+### Pseudo Code
+```text
+FUNCTION my_malloc(size)
+IF size <= 0 THEN RETURN NULL
+IF global_base is NULL THEN
+block = request_space(NULL, size)
+global_base = block
+ELSE
+block = find_free_block(last_block, size)
+IF block is NOT NULL THEN
+block.free = 0
+ELSE
+block = request_space(last_block, size)
+END IF
+END IF
+RETURN pointer right after the block header
+END FUNCTION
+```
+### The Exact Code
+```c
+// Helper to find a free block using the "First Fit" algorithm
+struct block_meta *find_free_block(struct block_meta **last, size_t size) {
+struct block_meta *current = global_base;
+// Loop through the list while current is not NULL
+while (current) {
+if (current->free && current->size >= size) {
+return current; // Found a big enough free block!
+}
+*last = current; // Keep track of the last block we looked at
+current = current->next;
+}
+return NULL; // No suitable block found
+}
+// Helper to request space from the OS and link it to our list
+struct block_meta *request_space(struct block_meta* last, size_t size) {
+struct block_meta *block;
+// We request size PLUS the size of our metadata header
+block = request_os_memory(size + META_SIZE);
+if (block == NULL) {
+return NULL; // OS refused to give us memory
+}
+// Initialize our new block's metadata
+block->size = size;
+block->next = NULL;
+block->free = 0; // It's in use
+// If we have a previous block, link it to this new one
+if (last) {
+last->next = block;
+}
+return block;
+}
+// Our custom malloc!
+void *my_malloc(size_t size) {
+struct block_meta *block;
+if (size <= 0) {
+return NULL;
+}
+if (!global_base) {
+// First call to malloc ever
+block = request_space(NULL, size);
+if (!block) { return NULL; }
+global_base = block;
+} else {
+struct block_meta *last = global_base;
+block = find_free_block(&last, size);
+if (!block) {
+// Failed to find a free block, ask OS for a new one
+block = request_space(last, size);
+if (!block) { return NULL; }
+} else {
+// Found a free block
+block->free = 0;
+}
+}
+// Return a pointer to the memory *after* the header
+return (block + 1);
+}
+```
+---
