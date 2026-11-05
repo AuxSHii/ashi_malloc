@@ -84,7 +84,9 @@ RETURN memory
 END IF
 END FUNCTION
 ```
-### The Exact Code
+
+### Code
+
 ```c
 #include <stddef.h> // For size_t
 #include <stdio.h>
@@ -154,6 +156,7 @@ the OS gives us a massive, completely empty expanse of heap memory. It has no bu
 5. Define a global pointer `global_base = NULL` to remember where our memory starts.
 6. Create a constant for the size of this header, so we know exactly how much extra memory to
 request from the OS.
+
 ### Pseudo Code
 ```text
 STRUCTURE block_meta
@@ -164,7 +167,7 @@ END STRUCTURE
 GLOBAL POINTER global_base = NULL
 MACRO META_SIZE = size of (block_meta)
 ```
-### The Exact Code
+### Code
 ```c
 // The metadata header that sits right before the user's memory
 struct block_meta {
@@ -192,7 +195,7 @@ suitable block, *then* we ask the OS for more memory and attach it to the end of
 
 when a user program needs memory, it simply asks for a number of bytes, for example by calling malloc(50). from the user's perspective, memory magically appears. But under the hood, our custom malloc acts as a middleman between the user and the Operating system.
 
-because asking the OS for memory (via sbrk or HeapAlloc) requires a **Context Switch**—a relatively slow and expensive process where the CPU pauses the user program to let the operating system kernel take over—we want to bother the OS as little as possible.
+because asking the OS for memory (via sbrk or HeapAlloc) requires a **Context Switch** a relatively slow and expensive process where the CPU pauses the user program to let the operating system kernel take over ...we want to bother the OS as little as possible.
 
 therefore, our primary goal is to **recycle** memory that has been previously used and freed, only asking the OS for more heap space as an absolute last resort...
 
@@ -250,6 +253,7 @@ END IF
 RETURN pointer right after the block header
 END FUNCTION
 ```
+
 ### The Exact Code
 ```c
 // Helper to find a free block using the "First Fit" algorithm

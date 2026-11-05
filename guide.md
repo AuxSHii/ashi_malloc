@@ -165,6 +165,7 @@ END STRUCTURE
 GLOBAL POINTER global_base = NULL
 MACRO META_SIZE = size of (block_meta)
 ```
+
 ### The Exact Code
 ```c
 // The metadata header that sits right before the user's memory
