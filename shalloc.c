@@ -43,7 +43,27 @@ block_meta *find_free_block(block_meta **last , size_t size){
     return NULL;
 }
 
+//fxn to req mem from os+ link it to list
+block_meta *request_space(block_meta* last , size_t size){
+    block_meta *block;
 
+    //req mem of size = UserReqSize+metadata
+    block = request_os_mem(size + META_SIZE);
+    if(block == NULL)
+        return NULL;
+    //else mem is given
+    //init new metadata block of given mem
+    block->size = size;
+    block->next = NULL; //as its last
+    block->free = 0; //in use
+
+    //attach this new block to prev[last] if we have one
+    if(last){
+        last->next = block;
+    }
+    return block; //else
+
+}
 
 
 
