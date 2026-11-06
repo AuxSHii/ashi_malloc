@@ -115,6 +115,24 @@ void *shalloc(size_t size){
     }
 //return ptr to mem after header[dont let usser overwrite the meta data header]
   return (block +1);
-  
+
 }
+
+//free up ptr.
+
+block_meta *get_block_ptr(void *ptr){
+    //cast void ptr --> struct type then step back
+    return (block_meta*)ptr - 1;
+}
+
+
+
+void free_ish(void *ptr){
+    if(!ptr)
+        return NULL;
+    block_meta* block_ptr = get_block_ptr(ptr); //get the hidden metadata
+    //mark block as free
+    block_ptr->free = 1;
+}
+
 
