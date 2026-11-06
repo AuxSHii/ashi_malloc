@@ -219,6 +219,52 @@ when we finally find or create the right memory block, a crucial detail is what 
 instead, we use C pointer arithmetic and return block + 1. bcuz block is a pointer of type struct block_meta*, adding 1 tells the C compiler to step forward in memory by exactly the size of one block_meta struct. This perfectly skips over our hidden header and points the user to the exact byte where their safe, empty memory begins.
 
 
+### why we need last_block:
+
+when find_free_block searches our linked list, there are two possible outcomes:
+ 1. Success: it finds a free block and returns it.
+ 2. Failure: it reaches the very end of the list without finding anything, returning NULL.
+when it fails, our malloc function is forced to ask the OS for brand new memory (using request_space). But remember, our memory is a Linked List. Whenever we create a brand new block, we must physically attach it to the end of our existing chain so it doesn't get lost.
+to attach a new block, we need to know exactly where the *last* block in our current chain is. If find_free_block didn't keep track of the last block it looked at, we would have to write a second loop to start at global_base and walk all the way down the list *again* just to find the tail end.
+by having find_free_block update a last_block variable as it searches, we hit two birds with one stone: we search for a free block, and if we fail, we are left holding the exact tail-end block we need to attach our new memory to.
+
+### how we pass it (how and double pointers)
+in C, if you pass a normal variable to a function, the function gets a *copy* of that variable. If the function changes it, the original variable in my_malloc remains completely unchanged.
+to allow a helper function to change a variable inside our main function, we have to pass a pointer to that variable. But our variable (struct block_meta *last) is *already* a pointer!
+this means we have to use a Pointer to a Pointer (a Double Pointer, written as **).
+how the handoff happens in code:
+1. Inside my_malloc:
+we create a standard pointer to track the last block, and when we call the search function, we pass the *memory address* of that pointer using the & symbol.
+```
+struct block_meta *last = global_base; 
+
+// We pass the ADDRESS of our 'last' pointer using &
+block = find_free_block(&last, size); 
+```
+2. Inside find_free_block:
+The function accepts this as a double pointer (**last). As it loops through the linked list, it uses the dereference operator (*) to reach back into my_malloc and update the original variable.
+```
+struct block_meta *find_free_block(struct block_meta **last, size_t size) {
+    struct block_meta *current = global_base;
+    
+    while (current) {
+        if (current->free && current->size >= size) {
+            return current; 
+        }
+        
+        // We use *last to overwrite the original variable inside my_malloc
+        *last = current; 
+        
+        current = current->next;
+    }
+    return NULL; 
+}
+```
+now, listen when find_free_block finishes and returns NULL, the last variable back in my_malloc is perfectly pointing to the tail of our list, ready to be passed into request_space(last, size).
+
+
+
+
 ### High-Level Steps
 1. If this is the very first time `malloc` is called, ask the OS for memory directly.
 2. If not, traverse the linked list to find a free block large enough for the request.

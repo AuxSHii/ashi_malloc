@@ -28,6 +28,19 @@ void *global_base = NULL;
 
 #endif
 
+//fxn to loop through linked list and find free block
+block_meta *find_free_block(block_meta **last , size_t size){
+	
+}
+
+
+
+
+
+
+
+
+
 
 void *request_os_mem(size_t size){
 	//if os-windows
