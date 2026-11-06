@@ -37,7 +37,6 @@ step we are gonna use:
 3. Free Memory: When finished, release the allocated block back to the heap using HeapFree
 [read more](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc)
 
-
 ### for unix:
 ### Understanding the Unix Heap: The sbrk System Call
 #### The Minimum Theory
@@ -53,6 +52,7 @@ to use sbrk in our malloc implementation, we must include the <unistd.h> header.
  * **Allocating Memory:** calling sbrk(1024) tells the OS to move the program break up by 1,024 bytes. If it succeeds, it returns a void pointer to the *start* of the newly created space.
  * **Checking Current Position:** calling sbrk(0) is a standard trick. It adds zero bytes, meaning it doesn't allocate any new memory. Instead, it simply returns the current memory address of the program break, letting you know exactly where your heap currently ends.
  * **Handling Errors:** if the system is entirely out of RAM or hits a memory limit, sbrk will fail. Instead of returning NULL, it returns (void*) -1. your code must explicitly check for (void*) -1 to safely reject a malloc request rather than trying to write data to an invalid -1 memory address.
+
 
 
 
@@ -84,7 +84,9 @@ RETURN memory
 END IF
 END FUNCTION
 ```
-### The Exact Code
+
+### Code
+
 ```c
 #include <stddef.h> // For size_t
 #include <stdio.h>
@@ -115,7 +117,6 @@ return request;
 }
 ```
 ---
-
 
 ## Section 2: Structuring Memory (Headers and Metadata)
 
@@ -155,6 +156,7 @@ the OS gives us a massive, completely empty expanse of heap memory. It has no bu
 5. Define a global pointer `global_base = NULL` to remember where our memory starts.
 6. Create a constant for the size of this header, so we know exactly how much extra memory to
 request from the OS.
+
 ### Pseudo Code
 ```text
 STRUCTURE block_meta
@@ -165,8 +167,7 @@ END STRUCTURE
 GLOBAL POINTER global_base = NULL
 MACRO META_SIZE = size of (block_meta)
 ```
-
-### The Exact Code
+### Code
 ```c
 // The metadata header that sits right before the user's memory
 struct block_meta {
@@ -181,8 +182,6 @@ void *global_base = NULL;
 ```
 ---
 
-
-
 ## Section 3: Implementing `malloc` (Finding and Allocating Blocks)
 
 ### The Minimum Theory
@@ -196,7 +195,7 @@ suitable block, *then* we ask the OS for more memory and attach it to the end of
 
 when a user program needs memory, it simply asks for a number of bytes, for example by calling malloc(50). from the user's perspective, memory magically appears. But under the hood, our custom malloc acts as a middleman between the user and the Operating system.
 
-because asking the OS for memory (via sbrk or HeapAlloc) requires a **Context Switch**—a relatively slow and expensive process where the CPU pauses the user program to let the operating system kernel take over—we want to bother the OS as little as possible.
+because asking the OS for memory (via sbrk or HeapAlloc) requires a **Context Switch** a relatively slow and expensive process where the CPU pauses the user program to let the operating system kernel take over ...we want to bother the OS as little as possible.
 
 therefore, our primary goal is to **recycle** memory that has been previously used and freed, only asking the OS for more heap space as an absolute last resort...
 
@@ -218,6 +217,72 @@ to find this recyclable memory efficiently, we use a search strategy called the 
 when we finally find or create the right memory block, a crucial detail is what we hand back to the user. We **cannot** just return the pointer to the block itself. If we did, the user would immediately write their data over our hidden metadata (corrupting our size and next pointer variables).
 
 instead, we use C pointer arithmetic and return block + 1. bcuz block is a pointer of type struct block_meta*, adding 1 tells the C compiler to step forward in memory by exactly the size of one block_meta struct. This perfectly skips over our hidden header and points the user to the exact byte where their safe, empty memory begins.
+
+
+### why we need last_block:
+
+when find_free_block searches our linked list, there are two possible outcomes:
+ 1. Success: it finds a free block and returns it.
+ 2. Failure: it reaches the very end of the list without finding anything, returning NULL.
+when it fails, our malloc function is forced to ask the OS for brand new memory (using request_space). But remember, our memory is a Linked List. Whenever we create a brand new block, we must physically attach it to the end of our existing chain so it doesn't get lost.
+to attach a new block, we need to know exactly where the *last* block in our current chain is. If find_free_block didn't keep track of the last block it looked at, we would have to write a second loop to start at global_base and walk all the way down the list *again* just to find the tail end.
+by having find_free_block update a last_block variable as it searches, we hit two birds with one stone: we search for a free block, and if we fail, we are left holding the exact tail-end block we need to attach our new memory to.
+
+### how we pass it (how and double pointers)
+in C, if you pass a normal variable to a function, the function gets a *copy* of that variable. If the function changes it, the original variable in my_malloc remains completely unchanged.
+to allow a helper function to change a variable inside our main function, we have to pass a pointer to that variable. But our variable (struct block_meta *last) is *already* a pointer!
+this means we have to use a Pointer to a Pointer (a Double Pointer, written as **).
+how the handoff happens in code:
+1. Inside my_malloc:
+we create a standard pointer to track the last block, and when we call the search function, we pass the *memory address* of that pointer using the & symbol.
+```
+struct block_meta *last = global_base; 
+
+// We pass the ADDRESS of our 'last' pointer using &
+block = find_free_block(&last, size); 
+```
+2. Inside find_free_block:
+The function accepts this as a double pointer (**last). As it loops through the linked list, it uses the dereference operator (*) to reach back into my_malloc and update the original variable.
+```
+struct block_meta *find_free_block(struct block_meta **last, size_t size) {
+    struct block_meta *current = global_base;
+    
+    while (current) {
+        if (current->free && current->size >= size) {
+            return current; 
+        }
+        
+        // We use *last to overwrite the original variable inside my_malloc
+        *last = current; 
+        
+        current = current->next;
+    }
+    return NULL; 
+}
+```
+now, listen when find_free_block finishes and returns NULL, the last variable back in my_malloc is perfectly pointing to the tail of our list, ready to be passed into request_space(last, size).
+
+
+
+we are also gonna write a list management function
+difference between this functions and the os_request_memory function we wrote earlier comes down to raw bytes v/s organized data structures.
+ one simply fetches raw memory from the OS, while the other formats that memory so our malloc can actually use it.
+
+1. request_os_memory (OS messenger)
+what it does: acts as a cross-platform translator between your C code and the OS. it uses #ifdef _WIN32 to figure out if it should call sbrk (Unix) or HeapAlloc (Windows).[we talked about that earlier]
+what it knows: nothing about your linked list, block headers, or metadata. it only knows how to ask the OS for a specific number of raw, unformatted bytes.
+analogy: this is like buying an empty, unmarked plot of land from the government.
+2. request_space (list manager)
+what it does: this function is the bridge between the raw OS memory and our custom linked list. It calculates the total amount of space needed (the size the user asked for plus the size of our hidden block_meta header) and calls request_os_memory to get it.
+how it organizes:once it receivess that raw memory, it casts the beginning of it into a struct block_meta. It initializes the metadata (setting size = size, free = 0, and next = NULL), and then physically links this brand-new block to the last block in our existing chain.
+analogy: this function takes that empty plot of land, builds a house (the user's data space) with an address mailbox out front (the metadata header), and makes a road connecting it to the previous house (the linked list).
+
+working flow:
+when malloc realizes it has run out of recyclable free blocks, it calls request_space.
+request_space calculates the math (user bytes + header bytes) and makes the actual OS request to request_os_memory.
+when request_os_memory returns the raw memory, request_space formats it into a proper node for our linked list so malloc can safely hand it to the user..
+
+
 
 
 ### High-Level Steps
@@ -254,7 +319,8 @@ END IF
 RETURN pointer right after the block header
 END FUNCTION
 ```
-### The Exact Code
+
+### Code
 ```c
 // Helper to find a free block using the "First Fit" algorithm
 struct block_meta *find_free_block(struct block_meta **last, size_t size) {
@@ -315,3 +381,53 @@ return (block + 1);
 }
 ```
 ---
+## Section 4: Implementing `free` (Releasing Memory)
+### The Minimum Theory
+When a user finishes with their memory, they call `free(pointer)`. But how do we know what
+block to free?
+Because we always return a pointer directly *after* our hidden metadata block, we can find the
+metadata by subtracting the size of the header from the pointer. Once we have the header, we
+simply set the `free` flag to `1`.
+*(Note: A more advanced implementation might merge adjacent free blocks to prevent
+fragmentation, or give memory back to the OS, but for this beginner guide, simply marking the
+block as free is perfectly sufficient).*
+### High-Level Steps
+1. Verify the pointer passed to `free` is not NULL.
+2. Step backward in memory by the size of the block header to find the metadata.
+3. Mark the `free` flag in the metadata as 1.
+### Detailed Low-Level Steps
+1. Create `my_free(void *ptr)`.
+2. Check `if (!ptr) return;`
+3. Cast `ptr` to a `struct block_meta*`.
+4. Subtract 1 from the casted pointer. Because of [pointer
+arithmetic](https://en.wikipedia.org/wiki/Pointer_(computer_programming)#Pointer_arithmetic),
+`ptr - 1` steps backward exactly by `META_SIZE`.
+5. Set `block_ptr->free = 1;`.
+### Pseudo Code
+```text
+FUNCTION my_free(pointer)
+IF pointer is NULL THEN
+RETURN
+END IF
+block_header = pointer - size of (block_meta)
+block_header.free = 1
+END FUNCTION
+```
+### The Exact Code
+```c
+// Helper function to get the block metadata from a user pointer
+struct block_meta *get_block_ptr(void *ptr) {
+// Cast the void pointer to our struct type and step back one struct size
+return (struct block_meta*)ptr - 1;
+}
+// Our custom free!
+void my_free(void *ptr) {
+if (!ptr) {
+return; // Nothing to free
+}
+// Get the hidden metadata header
+struct block_meta* block_ptr = get_block_ptr(ptr);
+// Mark the block as free so my_malloc can reuse it later
+block_ptr->free = 1;
+}
+```
