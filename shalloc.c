@@ -28,6 +28,28 @@ void *global_base = NULL;
 
 #endif
 
+
+void *request_os_mem(size_t size){
+    //if os-windows
+    #ifdef _WIN32
+    HANDLE heapH = GetProcessHeap(); //got the handle
+    if(heapH == NULL)
+        return NULL;
+    return HeapAlloc(heapH , 0 , size);
+    
+    #else //for unix
+    void *request = sbrk(size); //return ptr to mem addrss
+    if(request == (void*)-1 ) //failed 
+        return NULL;
+    
+    return request;
+    #endif
+
+}
+
+
+
+
 //fxn to loop through linked list and find free block
 block_meta *find_free_block(block_meta **last , size_t size){
 	block_meta *current = global_base; //init val
@@ -65,27 +87,34 @@ block_meta *request_space(block_meta* last , size_t size){
 
 }
 
+//mymalloc
 
+void *shalloc(size_t size){
+    block_meta *block;
+    if(size >= 0)
+        return NULL;
+    if(!global_base){
+        block = request_space(NULL , size);
+        if(!block) {return NULL;}
+        global_base = block; //this is now the last block
+    }
 
+    else {//find inside list
+        block_meta *last = global_base;
+        block = find_free_block(&last , size);
+        if(!block){
+            //failed to find free block inside our list
+            block = request_space(last , size);
+            if(!block) { return NULL; }
+        }
+        //else found a block inside our list
+        else {
+            block->free = 0; //in use
+        }
 
-
-
-
-
-void *request_os_mem(size_t size){
-	//if os-windows
-	#ifdef _WIN32
-	HANDLE heapH = GetProcessHeap(); //got the handle
-    if(heapH == NULL)
-    	return NULL;
-    return HeapAlloc(heapH , 0 , size);
-    
-    #else //for unix
-    void *request = sbrk(size); //returna ptr to mem addrss
-    if(request == (void*)-1 ) //failed 
-    	return NULL;
-    
-    return request;
-    #endif
-
+    }
+//return ptr to mem after header[dont let usser overwrite the meta data header]
+  return (block +1);
+  
 }
+
