@@ -30,7 +30,17 @@ void *global_base = NULL;
 
 //fxn to loop through linked list and find free block
 block_meta *find_free_block(block_meta **last , size_t size){
-	
+	block_meta *current = global_base; //init val
+    //loopp through the list
+    while(current){
+        if(current->free && current->size >= size){
+            return current;
+        }
+        *last = current; //keep track of last block
+        current = current->next; //incremented
+    }
+
+    return NULL;
 }
 
 
